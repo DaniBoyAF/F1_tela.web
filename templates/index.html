@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>F1 24 - Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --background-color: #fff;
+      --text-color: #000;
+      --panel-background: #f0f0f0;
+      --border-color: #ccc;
+      --highlight-color: #007bff;
+    }
+
+    body {
+      background: var(--background-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 10px;
+      font-family: Arial;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    body.dark-mode {
+      --background-color: #000;
+      --text-color: #fff;
+      --panel-background: #222;
+      --border-color: #444;
+      --highlight-color: #0f0;
+    }
+
+    #main-container {
+      display: flex;
+      width: 100%;
+      max-width: 1200px;
+      gap: 10px;
+    }
+    #left-panel {
+      width: 350px; /* Aumentado para acomodar a nova coluna */
+    }
+    #center-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #mapa {
+      background-color: var(--panel-background);
+      border: 2px solid var(--border-color);
+      border-radius: 10px;
+    }
+    #pneus-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .pneu-chart {
+      width: 180px;
+      height: 150px;
+    }
+    #telemetry-panel {
+      display: flex;
+      justify-content: space-between;
+      background: #222;
+      padding: 10px;
+      border-radius: 10px;
+    }
+    #telemetry-left {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    #telemetry-center {
+      text-align: center;
+    }
+    #telemetry-right {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    #rpm-gauge {
+      font-size: 48px;
+      color: #0f0;
+    }
+    #speed {
+      font-size: 24px;
+      color: #0ff;
+    }
+    #drs {
+      padding: 5px;
+      background: #0f0;
+      color: #000;
+      border-radius: 5px;
+    }
+    #drs.off {
+      background: #f00;
+    }
+    #flag {
+      padding: 5px;
+      border-radius: 5px;
+    }
+    #flag.NONE { background: #000; }
+    #flag.GREEN { background: #0f0; }
+    #flag.BLUE { background: #00f; }
+    #flag.YELLOW { background: #ff0; }
+    #flag.RED { background: #f00; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel-background);
+      color: var(--text-color);
+      font-size: 12px;
+    }
+    th, td {
+      padding: 5px;
+      text-align: center;
+      border: 1px solid #444;
+    }
+    th {
+      background: var(--border-color);
+    }
+    .pit {
+      background: #ff4444;
+      color: white;
+    }
+    .tyre-S { color: red; }
+    .tyre-M { color: yellow; }
+    .tyre-H { color: white; }
+    .tyre-I { color: limegreen; }
+    .tyre-W { color: blue; }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    #telemetry-comparison {
+      margin-top: 20px;
+      width: 100%;
+      max-width: 1200px;
+    }
+    #telemetry-comparison h2 {
+      text-align: center;
+    }
+    #comparison-controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    select, button {
+      padding: 5px;
+      font-size: 14px;
+    }
+    canvas {
+      background: var(--panel-background);
+      border: 1px solid var(--border-color);
+      margin-bottom: 10px;
+    }
+    @media (max-width: 768px) {
+      #main-container {
+        flex-direction: column;
+      }
+      #left-panel, #center-panel {
+        width: 100%;
+      }
+    }
+    #mode-controls {
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+    }
+    #map-options {
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    #options-menu {
+      margin-top: 5px;
+      background: var(--panel-background);
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>F1 24 - Dashboard</h1>
+  <button id="theme-toggle" style="margin-bottom: 10px;">Modo Escuro</button>
+  <div id="mode-controls">
+    <button id="modo-race">Modo Corrida</button>
+    <button id="modo-qualy">Modo Qualificação</button>
+  </div>
+  <div id="main-container">
+    <div id="left-panel">
+      <table id="tempos-table">
+        <thead>
+          <tr>
+            <th>P</th>
+            <th>#</th>
+            <th>ID</th> <!-- Nova coluna para o driverId -->
+            <th>NAME</th>
+            <th>GAP</th>
+            <th>LAP</th>
+            <th>TYRE</th>
+            <th>WEAR</th>
+          </tr>
+        </thead>
+        <tbody id="tempos-body"></tbody>
+      </table>
+    </div>
+    <div id="center-panel">
+      <div id="map-options">
+        <button id="toggle-options">Opções do Minimapa</button>
+        <div id="options-menu" style="display: none;">
+          <label><input type="radio" name="map-style" value="f1" checked /> Ícones de F1</label>
+          <label><input type="radio" name="map-style" value="f2" /> Ícones de F2</label>
+          <label><input type="radio" name="map-style" value="colors" /> Apenas Cores</label>
+        </div>
+      </div>
+      <canvas id="mapa" width="600" height="400"></canvas>
+      <div id="pneus-container"></div>
+      <div id="telemetry-panel">
+        <div id="telemetry-left">
+          <div id="speed">Speed: 0 km/h</div>
+          <div id="throttle">Throttle: 0%</div>
+          <div id="brake">Brake: 0%</div>
+        </div>
+        <div id="telemetry-center">
+          <div id="rpm-gauge">0</div>
+          <div>RPM</div>
+          <div id="gear">Gear: 0</div>
+          <div id="drs" class="off">DRS: OFF</div>
+        </div>
+        <div id="telemetry-right">
+          <div id="flag" class="NONE">Flag: NONE</div>
+          <div id="laps">Lap: 0/0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="telemetry-comparison">
+    <h2>Telemetry Comparison</h2>
+    <div id="comparison-controls">
+      <select id="piloto1">
+        <option value="0">Select Pilot 1</option>
+      </select>
+      <select id="piloto2">
+        <option value="1">Select Pilot 2</option>
+      </select>
+      <button onclick="atualizarComparacao()">Compare</button>
+      <button onclick="exportarCSV()">Exportar Dados</button>
+      <button onclick="exportarJSON()">Exportar JSON</button>
+    </div>
+    <div id="filters">
+      <label><input type="checkbox" id="showSpeed" checked /> Velocidade</label>
+      <label><input type="checkbox" id="showThrottle" checked /> Aceleração</label>
+      <label><input type="checkbox" id="showBrake" checked /> Freio</label>
+    </div>
+    <canvas id="gap-chart" height="100"></canvas>
+    <canvas id="speed-chart" height="100"></canvas>
+    <canvas id="throttle-chart" height="100"></canvas>
+    <canvas id="brake-chart" height="100"></canvas>
+    <canvas id="gear-chart" height="100"></canvas>
+    <canvas id="rpm-chart" height="100"></canvas>
+    <canvas id="volta-chart" height="100"></canvas>
+    <canvas id="lateral-acceleration-chart" height="100"></canvas>
+    <canvas id="fuel-chart" height="100"></canvas>
+  </div>
+
+  <script>
+    const mapaCanvas = document.getElementById("mapa");
+    const mapaCtx = mapaCanvas.getContext("2d");
+    const pneusContainer = document.getElementById("pneus-container");
+    const temposBody = document.getElementById("tempos-body");
+    const CANVAS_WIDTH = mapaCanvas.width;
+    const CANVAS_HEIGHT = mapaCanvas.height;
+
+    const corPneu = {
+      "S": "red", "M": "yellow", "H": "white", "I": "limegreen", "W": "blue", "N/A": "gray"
+    };
+
+    const corDesgaste = desgaste => {
+      if (desgaste < 30) return "green"; // Baixo desgaste
+      if (desgaste < 60) return "yellow"; // Médio desgaste
+      return "dark_red"; // Alto desgaste
+    };
+
+    let previousPositions = [];
+
+    async function atualizarMapa() {
+      const res = await fetch("http://localhost:5000/api/posicoes");
+      const data = await res.json();
+      const posicoes = data.posicoes;
+
+      // Limpar o canvas
+      mapaCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      posicoes.forEach((piloto, i) => {
+        const x = (piloto.worldPositionX - data.track.minX) * (CANVAS_WIDTH / (data.track.maxX - data.track.minX));
+        const z = (piloto.worldPositionZ - data.track.minZ) * (CANVAS_HEIGHT / (data.track.maxZ - data.track.minZ));
+
+        if (mapStyle === "f1") {
+          // Desenhar ícones de F1
+          const img = new Image();
+          img.src = `icons/f1/${piloto.equipe}.png`; // Caminho para os ícones de F1
+          img.onload = () => mapaCtx.drawImage(img, x - 10, z - 10, 20, 20);
+        } else if (mapStyle === "f2") {
+          // Desenhar ícones de F2
+          const img = new Image();
+          img.src = `icons/f2/${piloto.equipe}.png`; // Caminho para os ícones de F2
+          img.onload = () => mapaCtx.drawImage(img, x - 10, z - 10, 20, 20);
+        } else {
+          // Desenhar apenas círculos coloridos
+          mapaCtx.beginPath();
+          mapaCtx.arc(x, z, 5, 0, 2 * Math.PI);
+          mapaCtx.fillStyle = `hsl(${i * 15}, 100%, 50%)`; // Cor baseada no índice do piloto
+          mapaCtx.fill();
+        }
+      });
+    }
+
+    // Atualização dos gráficos de pneus
+    let charts = {};
+    async function atualizarPneus() {
+      try {
+        const res = await fetch("http://localhost:5000/api/pneus");
+        const dados = await res.json();
+
+        Object.entries(dados).forEach(([driverId, pneus]) => {
+          const canvasId = `pneu-${driverId}`;
+          let canvas = document.getElementById(canvasId);
+
+          if (!canvas) {
+            canvas = document.createElement("canvas");
+            canvas.id = canvasId;
+            canvas.className = "pneu-chart";
+            pneusContainer.appendChild(canvas);
+            charts[driverId] = new Chart(canvas, {
+              type: "bar",
+              data: {
+                labels: ["FL", "FR", "RL", "RR"],
+                datasets: [{
+                  label: `Piloto ${driverId}`,
+                  data: [],
+                  backgroundColor: []
+                }]
+              },
+              options: {
+                scales: { y: { beginAtZero: true, max: 100 } },
+                plugins: { legend: { display: false } },
+                maintainAspectRatio: false,
+                animation: {
+                  duration: 600,
+                  easing: "easeInOutQuad"
+                }
+              }
+            });
+          }
+
+          const valores = [
+            pneus.FL.desgaste, pneus.FR.desgaste,
+            pneus.RL.desgaste, pneus.RR.desgaste
+          ];
+          const cores = valores.map(corDesgaste);
+
+          charts[driverId].data.datasets[0].data = valores;
+          charts[driverId].data.datasets[0].backgroundColor = cores;
+          charts[driverId].update();
+        });
+      } catch (e) {
+        console.error("Erro nos pneus:", e);
+      }
+    }
+
+    // Atualização da tabela de tempos
+    async function atualizarTempos() {
+      try {
+        const res = await fetch("http://localhost:5000/api/tempos");
+        const dados = await res.json();
+
+        temposBody.innerHTML = "";
+        dados.forEach((carro, i) => {
+          const row = document.createElement("tr");
+          row.className = carro.status === "PIT" ? "pit" : "";
+          row.innerHTML = `
+            <td>${carro.position}</td>
+            <td>${carro.carNumber}</td>
+            <td>${carro.driverId}</td>
+            <td>${carro.nome}</td>
+            <td>${carro.gapLider.toFixed(3)}</td>
+            <td>${carro.currentLap}</td>
+            <td class="tyre-${carro.tyre}">${carro.tyre}</td>
+            <td>${carro.tyreWear.toFixed(1)}%</td>
+          `;
+          temposBody.appendChild(row);
+        });
+      } catch (e) {
+        console.error("Erro nos tempos:", e);
+      }
+    }
+
+    // Atualização da telemetria
+    async function atualizarTelemetria() {
+      const res = await fetch("http://localhost:5000/api/telemetria");
+      const dados = await res.json();
+
+      document.getElementById("speed").textContent = `Speed: ${dados.speed} km/h`;
+      document.getElementById("throttle").textContent = `Throttle: ${dados.throttle.toFixed(0)}%`;
+      document.getElementById("brake").textContent = `Brake: ${dados.brake.toFixed(0)}%`;
+      document.getElementById("rpm-gauge").textContent = dados.rpm;
+      document.getElementById("gear").textContent = `Gear: ${dados.gear}`;
+      document.getElementById("drs").textContent = `DRS: ${dados.drs ? "ON" : "OFF"}`;
+      document.getElementById("laps").textContent = `Lap: ${dados.currentLap}/${dados.totalLaps}`;
+    }
+
+    function atualizarGraficos() {
+      const showSpeed = document.getElementById("showSpeed").checked;
+      const showThrottle = document.getElementById("showThrottle").checked;
+      const showBrake = document.getElementById("showBrake").checked;
+
+      if (speedChart) {
+        speedChart.data.datasets[0].hidden = !showSpeed;
+        speedChart.update();
+      }
+      if (throttleChart) {
+        throttleChart.data.datasets[0].hidden = !showThrottle;
+        throttleChart.update();
+      }
+      if (brakeChart) {
+        brakeChart.data.datasets[0].hidden = !showBrake;
+        brakeChart.update();
+      }
+    }
+
+    document.getElementById("filters").addEventListener("change", atualizarGraficos);
+
+    function exportarCSV() {
+      const rows = [["Posição", "Número", "Nome", "Gap", "Volta", "Pneu", "Desgaste"]];
+      const tableRows = document.querySelectorAll("#tempos-body tr");
+
+      tableRows.forEach(row => {
+        const cols = row.querySelectorAll("td");
+        const data = Array.from(cols).map(col => col.textContent);
+        rows.push(data);
+      });
+
+      const csvContent = rows.map(e => e.join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "dados_f1.csv";
+      link.click();
+    }
+
+    function exportarJSON() {
+      const dados = [];
+      const tableRows = document.querySelectorAll("#tempos-body tr");
+
+      tableRows.forEach(row => {
+        const cols = row.querySelectorAll("td");
+        const data = {
+          position: cols[0].textContent,
+          carNumber: cols[1].textContent,
+          driverId: cols[2].textContent,
+          name: cols[3].textContent,
+          gap: cols[4].textContent,
+          lap: cols[5].textContent,
+          tyre: cols[6].textContent,
+          wear: cols[7].textContent
+        };
+        dados.push(data);
+      });
+
+      const jsonContent = JSON.stringify(dados, null, 2);
+      const blob = new Blob([jsonContent], { type: "application/json;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "dados_f1.json";
+      link.click();
+    }
+
+    let voltaChart;
+
+    function atualizarVoltaChart() {
+      const piloto1Id = document.getElementById("piloto1").value;
+      const piloto2Id = document.getElementById("piloto2").value;
+
+      fetch(`http://localhost:5000/api/telemetria_volta/${piloto1Id}/${piloto2Id}`)
+        .then(res => res.json())
+        .then(data => {
+          const labels = data.piloto1.lapDistance;
+          const piloto1Data = data.piloto1.speed;
+          const piloto2Data = data.piloto2.speed;
+
+          if (!voltaChart) {
+            voltaChart = new Chart(document.getElementById("volta-chart"), {
+              type: "line",
+              data: {
+                labels: labels,
+                datasets: [
+                  { label: `Piloto ${piloto1Id}`, data: piloto1Data, borderColor: "white", fill: false, tension: 0.4 },
+                  { label: `Piloto ${piloto2Id}`, data: piloto2Data, borderColor: "red", fill: false, tension: 0.4 }
+                ]
+              },
+              options: {
+                responsive: true,
+                scales: {
+                  x: { title: { display: true, text: "Distância na Volta (m)" } },
+                  y: { title: { display: true, text: "Velocidade (km/h)" } }
+                }
+              }
+            });
+          } else {
+            voltaChart.data.labels = labels;
+            voltaChart.data.datasets[0].data = piloto1Data;
+            voltaChart.data.datasets[1].data = piloto2Data;
+            voltaChart.update();
+          }
+        })
+        .catch(e => console.error("Erro no gráfico de voltas:", e));
+    }
+
+    function preencherSelectPilotos() {
+      const piloto1Select = document.getElementById("piloto1");
+      const piloto2Select = document.getElementById("piloto2");
+
+      fetch("http://localhost:5000/api/tempos")
+        .then(res => res.json())
+        .then(dados => {
+          dados.forEach(carro => {
+            const option1 = document.createElement("option");
+            option1.value = carro.driverId;
+            option1.textContent = `${carro.driverId} - ${carro.nome}`;
+            piloto1Select.appendChild(option1);
+
+            const option2 = document.createElement("option");
+            option2.value = carro.driverId;
+            option2.textContent = `${carro.driverId} - ${carro.nome}`;
+            piloto2Select.appendChild(option2);
+          });
+        });
+    }
+
+    preencherSelectPilotos();
+
+    // Atualizar o gráfico de voltas a cada 100ms
+    setInterval(atualizarVoltaChart, 500);
+
+    // Atualização automática consolidada
+    setInterval(() => {
+      atualizarMapa();
+      atualizarPneus();
+      atualizarTempos();
+      atualizarTelemetria();
+    }, 100); // Atualiza tudo a cada 0,1 segundos
+
+    // Atualizar telemetria e tabela de tempos a cada 0,1 segundos
+    setInterval(() => {
+      atualizarTelemetria();
+      atualizarTempos();
+    }, 300);
+
+    // Atualizar gráficos de pneus e voltas a cada 0,8 segundos
+    setInterval(() => {
+      atualizarPneus();
+      atualizarVoltaChart();
+    }, 800);
+
+    // Atualizar o mini-mapa a cada 1 segundo
+    setInterval(() => {
+      atualizarMapa();
+    }, 100);
+
+    let lateralAccelerationChart, fuelChart;
+
+    function atualizarGraficosAvancados() {
+      fetch("http://localhost:5000/api/telemetria")
+        .then(res => res.json())
+        .then(dados => {
+          const labels = Array.from({ length: dados.lateralAcceleration.length }, (_, i) => i + 1);
+
+          // Gráfico de Aceleração Lateral
+          if (!lateralAccelerationChart) {
+            lateralAccelerationChart = new Chart(document.getElementById("lateral-acceleration-chart"), {
+              type: "line",
+              data: {
+                labels: labels,
+                datasets: [{
+                  label: "Aceleração Lateral (G)",
+                  data: dados.lateralAcceleration,
+                  borderColor: "orange",
+                  fill: false,
+                  tension: 0.4
+                }]
+              },
+              options: {
+                responsive: true,
+                scales: {
+                  x: { title: { display: true, text: "Tempo (s)" } },
+                  y: { title: { display: true, text: "Aceleração Lateral (G)" } }
+                }
+              }
+            });
+          } else {
+            lateralAccelerationChart.data.labels = labels;
+            lateralAccelerationChart.data.datasets[0].data = dados.lateralAcceleration;
+            lateralAccelerationChart.update();
+          }
+
+          // Gráfico de Consumo de Combustível
+          if (!fuelChart) {
+            fuelChart = new Chart(document.getElementById("fuel-chart"), {
+              type: "line",
+              data: {
+                labels: labels,
+                datasets: [{
+                  label: "Consumo de Combustível (L)",
+                  data: dados.fuel,
+                  borderColor: "green",
+                  fill: false,
+                  tension: 0.4
+                }]
+              },
+              options: {
+                responsive: true,
+                scales: {
+                  x: { title: { display: true, text: "Tempo (s)" } },
+                  y: { title: { display: true, text: "Consumo de Combustível (L)" } }
+                }
+              }
+            });
+          } else {
+            fuelChart.data.labels = labels;
+            fuelChart.data.datasets[0].data = dados.fuel;
+            fuelChart.update();
+          }
+        })
+        .catch(e => console.error("Erro nos gráficos avançados:", e));
+    }
+
+    // Atualizar os gráficos avançados a cada 1 segundos
+    setInterval(atualizarGraficosAvancados, 1000);
+
+    const themeToggleButton = document.getElementById("theme-toggle");
+
+    // Carregar o tema salvo
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme === "dark") {
+      document.body.classList.add("dark-mode");
+      themeToggleButton.textContent = "Modo Claro";
+    }
+
+    // Alternar tema e salvar preferência
+    themeToggleButton.addEventListener("click", () => {
+      document.body.classList.toggle("dark-mode");
+      const isDarkMode = document.body.classList.contains("dark-mode");
+      themeToggleButton.textContent = isDarkMode ? "Modo Claro" : "Modo Escuro";
+      localStorage.setItem("theme", isDarkMode ? "dark" : "light");
+    });
+
+    function resetarDados() {
+      temposBody.innerHTML = "";
+      previousPositions = [];
+      if (voltaChart) {
+        voltaChart.data.labels = [];
+        voltaChart.data.datasets.forEach(dataset => dataset.data = []);
+        voltaChart.update();
+      }
+      console.log("Dados resetados.");
+    }
+
+    setInterval(atualizarMapa, 200); // Atualiza o mini-mapa a cada 1 segundo
+    setInterval(atualizarTempos, 100); // Atualiza a tabela de tempos a cada 1 segundo
+    setInterval(atualizarGraficosAvancados, 1200); // Atualiza gráficos avançados a cada 2 segundos
+
+    const modoRaceButton = document.getElementById("modo-race");
+    const modoQualyButton = document.getElementById("modo-qualy");
+
+    modoRaceButton.addEventListener("click", () => alterarModo("race"));
+    modoQualyButton.addEventListener("click", () => alterarModo("qualy"));
+
+    async function alterarModo(modo) {
+      try {
+        const res = await fetch("http://localhost:5000/api/modo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ modo })
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          console.log(`Modo alterado para: ${data.modo}`);
+          atualizarTempos(); // Atualiza a tabela de tempos com base no novo modo
+        } else {
+          console.error("Erro ao alterar modo:", data.message);
+        }
+      } catch (e) {
+        console.error("Erro ao alterar modo:", e);
+      }
+    }
+
+    const toggleOptionsButton = document.getElementById("toggle-options");
+    const optionsMenu = document.getElementById("options-menu");
+    let mapStyle = "f1"; // Estilo padrão
+
+    // Alternar visibilidade do menu de opções
+    toggleOptionsButton.addEventListener("click", () => {
+      optionsMenu.style.display = optionsMenu.style.display === "none" ? "block" : "none";
+    });
+
+    // Atualizar estilo do minimapa com base na seleção
+    document.querySelectorAll('input[name="map-style"]').forEach(input => {
+      input.addEventListener("change", (e) => {
+        mapStyle = e.target.value;
+        atualizarMapa(); // Atualiza o minimapa com o novo estilo
+      });
+    });
+  </script>
+</body>
+</html>
